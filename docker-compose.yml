@@ -1,0 +1,139 @@
+---
+name: ghcp-monitoring
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  otel-collector:
+    <<: *service-defaults
+    # yamllint disable rule:line-length
+    image: otel/opentelemetry-collector-contrib:0.138.0@sha256:4a951ff0a9772f4fa8e9c7a326434370301b98b2b813933468dcb54aa6a6b5e5
+    # yamllint enable rule:line-length
+    command:
+      - --config=/etc/otelcol/config.yaml
+    depends_on:
+      - clickhouse
+    volumes:
+      - ./config/otelcol-copilot.yaml:/etc/otelcol/config.yaml:ro
+    # ClickHouse credentials + retention are passed through so the collector
+    # config can resolve them via ${env:CLICKHOUSE_USER} / etc.
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      RETENTION_DAYS: ${RETENTION_DAYS:-90}
+    ports:
+      - ${OTEL_BIND_HOST:-127.0.0.1}:${OTEL_GRPC_PORT:-4317}:4317
+      - ${OTEL_BIND_HOST:-127.0.0.1}:${OTEL_HTTP_PORT:-4318}:4318
+      - ${OTEL_BIND_HOST:-127.0.0.1}:${OTEL_HEALTH_PORT:-13133}:13133
+    expose:
+      - "1777"
+      - "8888"
+    networks:
+      - monitoring
+
+  # ClickHouse — persistent OLAP store for Copilot telemetry. No host port:
+  # only otel-collector and dashboard reach it on the docker network.
+  # `read_only` is intentionally not set: ClickHouse needs writable
+  # `/var/lib/clickhouse` for data, marks, and parts. The named volume
+  # backs that path.
+  clickhouse:
+    restart: unless-stopped
+    user: "101:101"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    # yamllint disable rule:line-length
+    image: clickhouse/clickhouse-server:25.8@sha256:f58a9d341fabdb20a9c2e98bbb595f7566103f762ef62be0d4f283e0832869fa
+    # yamllint enable rule:line-length
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      # Keep the local dashboard lightweight: disable high-volume ClickHouse
+      # self-diagnostic logs and profilers while preserving user telemetry.
+      - ./config/clickhouse-low-cpu.xml:/etc/clickhouse-server/config.d/low-cpu.xml:ro
+      - ./config/clickhouse-users-low-cpu.xml:/etc/clickhouse-server/users.d/low-cpu.xml:ro
+    expose:
+      - "8123"
+      - "9000"
+    # Loopback-only host binding for dev parity (so `pnpm dev` running on the
+    # host can reach ClickHouse). Same security posture as the dashboard's
+    # 127.0.0.1:6969 — local processes only, never reachable off-host.
+    ports:
+      - "127.0.0.1:8123:8123"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - monitoring
+
+  # TanStack Start dashboard — sole UI surface (replaces Aspire + Jaeger).
+  # LAN-bind is opt-in via DASHBOARD_BIND_HOST in .env; defaults to loopback
+  # (ADR-0004). Image is built locally; non-root user and pinned base image
+  # are guaranteed by apps/dashboard/Dockerfile.
+  dashboard:
+    <<: *service-defaults
+    build:
+      context: ./apps/dashboard
+    depends_on:
+      - clickhouse
+      - otel-collector
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      NODE_ENV: production
+      PORT: "3000"
+      DASHBOARD_USER: ${DASHBOARD_USER:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-admin}
+      DASHBOARD_DEFAULT_RANGE: ${DASHBOARD_DEFAULT_RANGE:-7d}
+      DASHBOARD_DEFAULT_GRANULARITY: ${DASHBOARD_DEFAULT_GRANULARITY:-1h}
+    ports:
+      - ${DASHBOARD_BIND_HOST:-127.0.0.1}:${DASHBOARD_PORT:-6969}:3000
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://localhost:3000/api/healthz | grep -q '"ok":true'
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  clickhouse-data:

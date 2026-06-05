@@ -1,0 +1,84 @@
+---
+name: Bug report
+description: Report a reproducible problem with the local monitoring stack.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not attach `.env`, ClickHouse dumps,
+        raw telemetry, prompt/response content, or secrets.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+      placeholder: >
+        The dashboard shows no calls even though the collector receives spans.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide a minimal sequence of commands or UI actions.
+      placeholder: |
+        1. cp .env.example .env
+        2. docker compose up -d
+        3. source scripts/setup-terminal.sh
+           # or: .\scripts\setup-terminal.ps1 on Windows PowerShell
+        4. Run a Copilot CLI command
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The /calls panel should show the latest request.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: The /calls panel remains empty.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15.5, Ubuntu 24.04, Windows 11 + WSL2, etc.
+    validations:
+      required: true
+  - type: input
+    id: docker
+    attributes:
+      label: Docker / Compose versions
+      placeholder: docker 28.0.0, docker compose v2.33.0
+    validations:
+      required: true
+  - type: input
+    id: copilot
+    attributes:
+      label: Copilot client
+      placeholder: >
+        Copilot CLI version or VS Code + Copilot Chat extension version
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation output
+      description: Paste redacted output from the commands below.
+      render: shell
+      placeholder: |
+        docker compose ps
+        bash scripts/validate.sh connectivity
+        docker compose logs --since 5m otel-collector
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Add screenshots or notes. Redact sensitive data first.

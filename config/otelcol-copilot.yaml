@@ -1,0 +1,190 @@
+---
+# OTel Collector config for GitHub Copilot CLI + Chat telemetry.
+#
+# Goal: collect every signal described in the upstream guide
+# (https://github.com/microsoft/vscode-copilot-chat/blob/main/docs/monitoring/agent_monitoring.md)
+# - traces:  invoke_agent, chat, execute_tool spans (full GenAI semconv)
+# - metrics: gen_ai.* + copilot_chat.* (tool calls, edits, survival, sessions)
+# - logs:    gen_ai.client.inference.operation.details, copilot_chat.* events
+#
+# Safety baseline:
+# - Auth headers / cookies are ALWAYS stripped (defense-in-depth).
+# - GenAI content (prompts, responses, tool args) is OPT-IN at the client via
+#   COPILOT_OTEL_CAPTURE_CONTENT. The collector does not double-redact by
+#   default; if you want belt-and-suspenders, wire `attributes/redact-content`
+#   into the active pipelines.
+#
+# Fan-out: every signal goes to ClickHouse (persistent OLAP store backing the
+# custom TanStack Start dashboard on :6969) plus debug/metadata for local
+# operator visibility.
+#
+# Storage: ClickHouse on the docker network. The `clickhouse-server` image
+# creates the `${CLICKHOUSE_DB}` database from the env var on first start; the
+# `clickhouse` exporter's `create_schema: true` creates the `otel_traces`,
+# `otel_logs`, and `otel_metrics_*` tables on first connection. No init SQL
+# or materialized views are required for v1; the dashboard queries
+# `otel_traces` directly.
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+        max_request_body_size: 16777216
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 384
+    spike_limit_mib: 128
+
+  # Always-on: strip transport-layer secrets that Copilot may emit when
+  # COPILOT_OTEL_HTTP_INSTRUMENTATION=true. Cheap and unconditional.
+  attributes/scrub-auth:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+      - key: http.request.header.proxy-authorization
+        action: delete
+      - key: http.request.header.cookie
+        action: delete
+      - key: http.response.header.set-cookie
+        action: delete
+      - key: url.full
+        action: delete
+
+  # OPT-IN: deletes prompt/response/tool content even when the client opted in.
+  # NOT in any default pipeline — add to a pipeline's `processors:` list to
+  # use it (e.g., when exporting to a backend without its own redaction).
+  attributes/redact-content:
+    actions:
+      - key: gen_ai.input.messages
+        action: delete
+      - key: gen_ai.output.messages
+        action: delete
+      - key: gen_ai.system_instructions
+        action: delete
+      - key: gen_ai.tool.definitions
+        action: delete
+      - key: gen_ai.tool.call.arguments
+        action: delete
+      - key: gen_ai.tool.call.result
+        action: delete
+
+  # Enrich every signal with deployment / host context so dashboards can
+  # filter by workstation and OS. The `docker` detector is intentionally
+  # omitted — it requires a docker-socket mount, which the security baseline
+  # forbids.
+  resourcedetection:
+    detectors:
+      - env
+      - system
+    timeout: 2s
+    override: false
+    system:
+      hostname_sources:
+        - os
+
+  # Tag everything with the collector's role so multi-collector setups stay
+  # distinguishable downstream.
+  resource/collector:
+    attributes:
+      - key: telemetry.collector.name
+        value: ghcp-monitoring
+        action: upsert
+
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+exporters:
+  # ClickHouse: single persistent OLAP backend for traces, metrics, and logs.
+  # The contrib exporter creates `otel_traces`, `otel_logs`, and the
+  # `otel_metrics_*` family on first connect (create_schema: true). The
+  # custom dashboard queries `otel_traces` directly over HTTP SQL.
+  # Credentials come from .env so this YAML never carries secrets.
+  # `ttl` is a Go duration; ClickHouse exporter accepts up to `h` (no `d`).
+  # 2160h = 90 days; bump in lockstep with `RETENTION_DAYS` in .env.
+  clickhouse:
+    endpoint: tcp://clickhouse:9000?dial_timeout=10s
+    database: ${env:CLICKHOUSE_DB}
+    username: ${env:CLICKHOUSE_USER}
+    password: ${env:CLICKHOUSE_PASSWORD}
+    create_schema: true
+    ttl: 2160h
+    timeout: 10s
+    sending_queue:
+      enabled: true
+      queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Local visibility for collector operators. `basic` keeps log volume low.
+  debug/metadata:
+    verbosity: basic
+
+service:
+  extensions:
+    - health_check
+    - pprof
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - attributes/scrub-auth
+        - resourcedetection
+        - resource/collector
+        - batch
+      exporters:
+        - clickhouse
+        - debug/metadata
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - attributes/scrub-auth
+        - resourcedetection
+        - resource/collector
+        - batch
+      exporters:
+        - clickhouse
+        - debug/metadata
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - attributes/scrub-auth
+        - resourcedetection
+        - resource/collector
+        - batch
+      exporters:
+        - clickhouse
+        - debug/metadata

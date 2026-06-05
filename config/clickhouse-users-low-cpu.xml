@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <profiles>
+        <default>
+            <!-- Disable sampling profilers that write high-volume rows to system.trace_log. -->
+            <query_profiler_real_time_period_ns>0</query_profiler_real_time_period_ns>
+            <query_profiler_cpu_time_period_ns>0</query_profiler_cpu_time_period_ns>
+            <memory_profiler_step>0</memory_profiler_step>
+            <trace_profile_events>0</trace_profile_events>
+            <metrics_perf_events_enabled>0</metrics_perf_events_enabled>
+
+            <!-- Keep query logs off for this single-user local dashboard profile. -->
+            <log_queries>0</log_queries>
+            <log_query_threads>0</log_query_threads>
+            <log_query_views>0</log_query_views>
+        </default>
+    </profiles>
+</clickhouse>

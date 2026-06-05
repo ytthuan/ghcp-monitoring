@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+.output
+.vinxi
+.tanstack
+dist
+build
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+coverage
+*.log
+README.md
+Dockerfile
+.dockerignore

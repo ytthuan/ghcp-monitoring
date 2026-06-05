@@ -1,0 +1,104 @@
+---
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 9.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/dashboard/pnpm-lock.yaml
+
+      - name: Validate compose, YAML, and shell
+        run: bash scripts/validate.sh ci
+
+      - name: Install dashboard dependencies
+        run: pnpm --dir apps/dashboard install --frozen-lockfile
+
+      - name: Typecheck dashboard
+        run: pnpm --dir apps/dashboard typecheck
+
+      - name: Lint dashboard
+        run: pnpm --dir apps/dashboard lint
+
+      - name: Run dashboard unit tests
+        run: pnpm --dir apps/dashboard test:unit
+
+      - name: Build dashboard
+        run: pnpm --dir apps/dashboard build
+
+  windows:
+    name: Windows dashboard
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 9.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/dashboard/pnpm-lock.yaml
+
+      - name: Verify PowerShell Copilot setup helper
+        shell: pwsh
+        run: |
+          .\scripts\setup-terminal.ps1
+          if ($env:COPILOT_OTEL_ENABLED -ne "true") {
+            throw "COPILOT_OTEL_ENABLED was not set"
+          }
+          if ($env:COPILOT_OTEL_CAPTURE_CONTENT -ne "false") {
+            throw "COPILOT_OTEL_CAPTURE_CONTENT default changed"
+          }
+          if ($env:OTEL_EXPORTER_OTLP_ENDPOINT -ne "http://127.0.0.1:4318") {
+            throw "OTLP endpoint was not set"
+          }
+          if ($env:OTEL_EXPORTER_OTLP_PROTOCOL -ne "http/protobuf") {
+            throw "OTLP protocol was not set"
+          }
+
+      - name: Install dashboard dependencies
+        run: pnpm --dir apps/dashboard install --frozen-lockfile
+
+      - name: Typecheck dashboard
+        run: pnpm --dir apps/dashboard typecheck
+
+      - name: Lint dashboard
+        run: pnpm --dir apps/dashboard lint
+
+      - name: Run dashboard unit tests
+        run: pnpm --dir apps/dashboard test:unit
+
+      - name: Build dashboard
+        run: pnpm --dir apps/dashboard build

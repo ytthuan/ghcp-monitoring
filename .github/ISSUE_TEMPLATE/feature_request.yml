@@ -1,0 +1,50 @@
+---
+name: Feature request
+description: >
+  Suggest an improvement to the collector, dashboard, docs, or setup flow.
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What telemetry question or workflow is hard today?
+      placeholder: >
+        I want to compare cache hit ratio by model over the last 30 days.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should change?
+      placeholder: Add a model-segmented cache panel with day-level grouping.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard UI
+        - ClickHouse queries/schema
+        - OTel collector pipeline
+        - Docker Compose/setup
+        - Documentation
+        - Security/hardening
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What have you tried or considered?
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: >
+        Add mockups, links, or examples. Do not include raw telemetry or
+        secrets.

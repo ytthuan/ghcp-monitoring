@@ -1,0 +1,9 @@
+---
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ytthuan/ghcp-monitoring/security/advisories/new
+    about: Please report security issues privately, not in public issues.
+  - name: Questions and setup help
+    url: https://github.com/ytthuan/ghcp-monitoring/discussions
+    about: Use Discussions for support-style questions if enabled.

@@ -1,0 +1,52 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+*.bak
+*.swp
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Secrets and local config
+.env
+.env.local
+.env.*.local
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / TypeScript
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Telemetry / observability local state
+otel-data/
+prometheus-data/
+grafana-data/
+aspire-data/
+*.otlp
+
+# Copilot session state (local-only)
+.copilot/session-state/
+
+# agents-system-setup operational state — NEVER commit, NEVER place inside an agents/ dir
+.agents-system-setup/
+
+# Local-only scratch directory (used by the dashboard for ad-hoc fixtures)
+tmp/

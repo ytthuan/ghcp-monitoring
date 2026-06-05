@@ -1,0 +1,37 @@
+NOTICE
+======
+
+ghcp-monitoring
+Copyright (c) 2026 ghcp-monitoring contributors
+
+This product includes data from the following third-party sources:
+
+----
+
+litellm model price snapshot
+- Source: https://github.com/BerriAI/litellm
+- File: apps/dashboard/app/server/data/litellm-prices.json
+- License: MIT (https://github.com/BerriAI/litellm/blob/main/LICENSE)
+
+The bundled JSON snapshot at `apps/dashboard/app/server/data/litellm-prices.json`
+is a point-in-time copy of the canonical model pricing table maintained by
+BerriAI/litellm. It is used by the dashboard to compute estimated $-cost per
+call from token counts. No code from litellm is included or executed.
+
+----
+
+OpenTelemetry Collector Contrib (runtime container image)
+- Image: otel/opentelemetry-collector-contrib (pinned by digest)
+- License: Apache-2.0
+
+The collector is consumed as an upstream container image and is not modified.
+Source: https://github.com/open-telemetry/opentelemetry-collector-contrib
+
+----
+
+ClickHouse (runtime container image)
+- Image: clickhouse/clickhouse-server (pinned by digest)
+- License: Apache-2.0
+
+ClickHouse is consumed as an upstream container image and is not modified.
+Source: https://github.com/ClickHouse/ClickHouse
