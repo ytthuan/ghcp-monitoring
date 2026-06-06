@@ -36,13 +36,18 @@ export function AreaStacked({
   const config: ChartConfig = Object.fromEntries(
     keys.map((k) => [k, { label: k, color: resolve(k) }]),
   );
+  // Keep coarse time anchors even for dense series instead of hiding the axis
+  // entirely — a monitoring chart should stay readable in a static screenshot.
+  const tickInterval =
+    data.length > 6 ? Math.max(0, Math.ceil(data.length / 6) - 1) : 0;
   return (
     <ChartContainer config={config}>
       <AreaChart data={data}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis
           dataKey="bucket"
-          hide={data.length > 30}
+          interval={tickInterval}
+          minTickGap={16}
           tickFormatter={(v: string) => formatHourLabelInTz(v, tz)}
         />
         <YAxis />

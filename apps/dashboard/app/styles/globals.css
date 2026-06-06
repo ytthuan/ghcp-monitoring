@@ -292,7 +292,10 @@ html {
   position: fixed;
   inset: -25%;
   pointer-events: none;
-  opacity: 0.55;
+  /* Kept deliberately low so brand atmosphere never competes with dense,
+     evidence-heavy dashboard routes. Color is reserved for data roles, alerts,
+     focus, and state first. */
+  opacity: 0.32;
   filter: blur(70px);
   background-image:
     radial-gradient(38% 38% at 18% 22%, hsl(var(--brand) / 0.20), transparent 70%),
@@ -300,7 +303,7 @@ html {
     radial-gradient(42% 42% at 62% 86%, hsl(var(--brand-3) / 0.16), transparent 72%);
   animation: ghcp-aurora 34s var(--ease-emphasized) infinite alternate;
 }
-.dark .aurora-layer { opacity: 0.4; }
+.dark .aurora-layer { opacity: 0.26; }
 [data-doc-hidden="true"] .aurora-layer { animation-play-state: paused; }
 
 /* ===========================================================================

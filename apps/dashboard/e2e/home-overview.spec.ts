@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test";
 
-// The Home page is now a single-page overview composed of:
-//   Section 1 — 6 KPI cards (incl. Estimated cost)
-//   Section 2 — Trend chart card (link to /trends)
-//   Section 3 — Top models / Cache / Latency (3-up)
-//   Section 4 — Tools / Finish / Sessions (3-up)
+// The Home page is a command-center overview composed of:
+//   Tier 1 — command strip (status), KPI cards, then a primary evidence grid
+//            of the token+cost timeline (overview-trend) + action queue.
+//   Tier 2 — Top models / Cache / Latency snapshot (3-up) + mini metrics.
+//   Tier 3 — deep cockpits: token+cost, model economics, cache+performance,
+//            tools+agents, workload shape.
 //
 // All "View details →" links must propagate the current URL search/filters.
 // Tests must tolerate three end-states (data, empty, query failure) the same
@@ -69,6 +70,7 @@ test("home overview shows trend + 3-up + 3-up sections with details links", asyn
   await expect(page.getByTestId("overview-kpis")).toBeVisible();
   for (const id of [
     "overview-trend",
+    "overview-action-queue",
     "overview-top-models",
     "overview-cache",
     "overview-latency",
@@ -87,7 +89,7 @@ test("home overview shows trend + 3-up + 3-up sections with details links", asyn
 
   // Cache section renders the FormulaBadge accessible label.
   await expect(
-    page.getByLabel(/Formula:\s*cache_read \/ \(cache_read \+ input\)/i).first(),
+    page.getByLabel(/Formula:\s*cache_read \/ input/i).first(),
   ).toBeVisible();
 
   // Each section card carries a "View details →" link.

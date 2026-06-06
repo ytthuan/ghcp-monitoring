@@ -19,7 +19,12 @@ import {
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { useFilters } from "~/lib/use-filters";
-import { useTimezone, resolveQueryTz, formatTimestampInTz } from "~/lib/use-timezone";
+import {
+  useTimezone,
+  resolveQueryTz,
+  formatTimestampInTz,
+  formatInTz,
+} from "~/lib/use-timezone";
 import { KpiCard } from "~/components/data/KpiCard";
 import { AnimatedNumber } from "~/components/data/AnimatedNumber";
 import { FormulaBadge } from "~/components/data/FormulaBadge";
@@ -41,6 +46,12 @@ import { Donut } from "~/components/charts/Donut";
 import { Heatmap } from "~/components/charts/Heatmap";
 import { Histogram } from "~/components/charts/Histogram";
 import { Sparkline } from "~/components/charts/Sparkline";
+import { TokenCostTimeline, type TokenCostPoint } from "~/components/charts/TokenCostTimeline";
+import { CommandStrip } from "~/components/overview/CommandStrip";
+import { ActionQueue } from "~/components/overview/ActionQueue";
+import { ModelCostBars } from "~/components/overview/ModelCostBars";
+import { StackedTokenBar } from "~/components/overview/StackedTokenBar";
+import { PercentileBar } from "~/components/overview/PercentileBar";
 import { Badge } from "~/components/ui/badge";
 import {
   formatCompact,
@@ -51,9 +62,23 @@ import {
   formatUsd,
   formatUsdExact,
 } from "~/lib/format";
-import { additiveTokenTotal, cacheHitRatio, freshInputTokens } from "~/lib/token-math";
+import {
+  additiveTokenTotal,
+  cacheHitRatio,
+  freshInputTokens,
+  normalizeCacheReadTokens,
+} from "~/lib/token-math";
 import { InternalModelBadge } from "~/components/data/InternalModelBadge";
 import { FiltersSchema } from "~/lib/types";
+import { getFreshness, type FreshnessStats } from "~/server/queries/freshness";
+import { isRevealActive } from "~/components/layout/RevealBanner";
+import {
+  deriveActionItems,
+  deriveCommandStrip,
+  type ActionItem,
+  type DetailRoute,
+  type OverviewSignalInput,
+} from "~/lib/overview-signals";
 import type { OverviewInsights } from "~/server/queries/overview_insights";
 
 const NUM_FULL = new Intl.NumberFormat("en-US");
@@ -140,6 +165,17 @@ export const Route = createFileRoute("/")({
 
 type OverviewData = Awaited<ReturnType<typeof fetchOverview>>;
 
+function useRevealActive(): boolean {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const sync = () => setActive(isRevealActive());
+    sync();
+    window.addEventListener("copilot-reveal-changed", sync);
+    return () => window.removeEventListener("copilot-reveal-changed", sync);
+  }, []);
+  return active;
+}
+
 function OverviewPage() {
   const { filters } = useFilters();
   const { tz } = useTimezone();
@@ -148,6 +184,14 @@ function OverviewPage() {
     queryKey: ["overview", filters, serverTz],
     queryFn: () => fetchOverview({ data: { filters, tz: serverTz } }),
   });
+  // Shares the ["freshness"] cache with the header RefreshControl so the
+  // command strip and action queue stay in lock-step with the header badge.
+  const freshness = useQuery<FreshnessStats>({
+    queryKey: ["freshness"],
+    queryFn: () => getFreshness(),
+    staleTime: 5_000,
+  });
+  const revealActive = useRevealActive();
 
   if (q.isLoading) return <OverviewSkeleton />;
   if (q.error) throw q.error;
@@ -161,36 +205,77 @@ function OverviewPage() {
     );
   }
 
+  const lastIso = freshness.data?.lastSpanAt ?? null;
+  const secsSinceSpan = lastIso
+    ? Math.max(0, Math.floor((Date.now() - new Date(lastIso).getTime()) / 1000))
+    : null;
+  const signalInput: OverviewSignalInput = {
+    totals: {
+      calls: o.totals.calls,
+      copilot_cost: o.totals.copilot_cost,
+      copilot_cost_calls: o.totals.copilot_cost_calls,
+    },
+    cost: { total: o.cost.total, unknownModels: o.cost.unknownModels },
+    cacheHitRatio: o.cache.hitRatio,
+    inputTokens: o.cache.totalInput,
+    cacheReadTokens: o.cache.totalRead,
+    latency: o.latency,
+    cacheSavings: {
+      coverage: o.insights.cacheSavings.coverage,
+      totalCacheRead: o.insights.cacheSavings.totalCacheRead,
+    },
+    traceErrors: o.insights.traceShape.largest.reduce((s, t) => s + t.errors, 0),
+    freshness: lastIso
+      ? {
+          lastSpanAt: lastIso,
+          secondsSinceLastSpan: secsSinceSpan,
+          spansLast5m: freshness.data?.spansLast5m ?? 0,
+        }
+      : null,
+    revealActive,
+  };
+  const strip = deriveCommandStrip(signalInput);
+  const actionItems = deriveActionItems(signalInput);
+  const lastSpanLabel = lastIso
+    ? formatInTz(lastIso, tz, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : "—";
+  const tokenCostSeries = buildTokenCostSeries(o.trend, o.insights.costTrend);
+
   return (
     <div className="space-y-6">
       <SectionAnchorNav />
+      {/* Tier 1 — command center: status, KPIs, primary evidence, action queue. */}
       <section
         id="section-tokens"
-        aria-label="Headline KPIs"
-        className="scroll-mt-[calc(var(--ghcp-filter-bar-height,3.5rem)+4rem)] space-y-3"
+        aria-label="Status and headline KPIs"
+        className="scroll-mt-[calc(var(--ghcp-filter-bar-height,3.5rem)+4rem)] space-y-4"
         data-anchor-section="tokens"
       >
-        <SectionHeading
-          id="section-tokens-heading"
-          title="Headline KPIs"
-          description="Token volume, total calls, and estimated spend in the selected window."
-        />
+        <CommandStrip strip={strip} lastSpanLabel={lastSpanLabel} storageOk />
         <Section1 totals={o.totals} cost={o.cost} />
-        <InsightCommandStrip
-          totals={o.totals}
-          cost={o.cost}
-          insights={o.insights}
-        />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+          <PrimaryTimelineCard data={tokenCostSeries} tz={tz} totalCost={o.cost.total} />
+          <ActionQueueCard items={actionItems} />
+        </div>
       </section>
+      {/* Tier 2 — spend / cache / latency snapshot, then deeper analysis. */}
       <section
         id="section-cost"
-        aria-label="Cost and tokens"
+        aria-label="Spend, cache and latency"
         className="scroll-mt-[calc(var(--ghcp-filter-bar-height,3.5rem)+4rem)] space-y-6"
         data-anchor-section="cost"
       >
-        <Section2 trend={o.trend} tz={tz} />
-        <TokenCostCockpit insights={o.insights} tz={tz} />
+        <SectionHeading
+          title="Spend, cache & latency snapshot"
+          description="The fastest read on what is expensive, what is cached, and what is slow."
+        />
         <Section3 byModel={o.byModel} cache={o.cache} latency={o.latency} />
+        <MiniMetricRow totals={o.totals} cost={o.cost} insights={o.insights} />
+        <TokenCostCockpit insights={o.insights} tz={tz} />
         <Section4 tools={o.tools} finish={o.finish} sessions={o.sessions} />
         <ModelEconomicsCockpit insights={o.insights} />
       </section>
@@ -245,7 +330,7 @@ function tokenMixValue(insights: OverviewInsights, name: string): number {
   return insights.tokenMix.find((row) => row.name === name)?.value ?? 0;
 }
 
-function InsightCommandStrip({
+function MiniMetricRow({
   totals,
   cost,
   insights,
@@ -266,7 +351,7 @@ function InsightCommandStrip({
   return (
     <div
       className="grid grid-cols-2 gap-3 lg:grid-cols-5"
-      data-testid="overview-command-strip"
+      data-testid="overview-mini-metrics"
     >
       <MiniMetric
         label="Tokens / call"
@@ -319,18 +404,92 @@ function MiniMetric({
   );
 }
 
-type DetailRoute =
-  | "/trends"
-  | "/models"
-  | "/cache"
-  | "/latency"
-  | "/ttft"
-  | "/traces"
-  | "/tools"
-  | "/agents"
-  | "/sessions"
-  | "/heatmap"
-  | "/finish";
+// --------------------------------------------------------------------------
+// Primary evidence — combined token + cost timeline and action queue
+// --------------------------------------------------------------------------
+
+function buildTokenCostSeries(
+  trend: OverviewData["trend"],
+  costTrend: OverviewData["insights"]["costTrend"],
+): TokenCostPoint[] {
+  const costByBucket = new Map(costTrend.map((c) => [c.bucket, c.cost]));
+  return trend.map((t) => ({
+    bucket: t.bucket,
+    fresh_input: freshInputTokens(t.input, t.cache_read),
+    cache_read: normalizeCacheReadTokens(t.input, t.cache_read),
+    output: t.output,
+    cache_create: t.cache_create,
+    cost: Number((costByBucket.get(t.bucket) ?? 0).toFixed(4)),
+  }));
+}
+
+function PrimaryTimelineCard({
+  data,
+  tz,
+  totalCost,
+}: {
+  data: TokenCostPoint[];
+  tz: string;
+  totalCost: number;
+}) {
+  return (
+    <Card data-testid="overview-trend">
+      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+        <div className="space-y-1">
+          <CardTitle>Token &amp; cost timeline</CardTitle>
+          <CardDescription>
+            Stacked token volume with estimated spend overlaid — one story from
+            usage to cost.
+          </CardDescription>
+          <div className="text-sm font-medium tabular-nums text-foreground">
+            {formatUsd(totalCost)} estimated this window
+          </div>
+        </div>
+        <Link
+          to="/trends"
+          search={(prev) => prev}
+          className="shrink-0 inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          View details
+          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      </CardHeader>
+      <CardContent>
+        {data.length === 0 ? (
+          <EmptyState
+            title="No token activity yet"
+            description="The timeline appears once Copilot calls are recorded. If you expected data, widen the time range or clear filters."
+          />
+        ) : (
+          <TokenCostTimeline data={data} tz={tz} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActionQueueCard({ items }: { items: ActionItem[] }) {
+  const open = items.filter(
+    (i) => i.severity === "critical" || i.severity === "warning",
+  ).length;
+  return (
+    <Card data-testid="overview-action-queue" className="flex flex-col">
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <div className="space-y-1">
+          <CardTitle>Action queue</CardTitle>
+          <CardDescription>
+            {open > 0
+              ? `${open} item${open === 1 ? "" : "s"} need attention`
+              : "Nothing needs attention right now"}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1">
+        <ActionQueue items={items} />
+      </CardContent>
+    </Card>
+  );
+}
 
 // --------------------------------------------------------------------------
 // Anchor navigation (in-page jump strip)
@@ -606,50 +765,6 @@ function Section1({
 }
 
 // --------------------------------------------------------------------------
-// Section 2 — Trend
-// --------------------------------------------------------------------------
-
-function Section2({
-  trend,
-  tz,
-}: {
-  trend: OverviewData["trend"];
-  tz: string;
-}) {
-  return (
-    <Card data-testid="overview-trend">
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>Token trend</CardTitle>
-        <Link
-          to="/trends"
-          search={(prev) => prev}
-          className="shrink-0 inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          View details
-          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-        </Link>
-      </CardHeader>
-      <CardContent>
-        {trend.length === 0 ? (
-          <EmptyState
-              title="No token activity yet"
-              description="Token trend appears once Copilot calls are recorded."
-            />
-        ) : (
-          <div className="h-64 md:h-72">
-            <AreaStacked
-              data={trend}
-              keys={["input", "output", "cache_read", "cache_create"]}
-              tz={tz}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// --------------------------------------------------------------------------
 // Section 3 — Top models / Cache / Latency
 // --------------------------------------------------------------------------
 
@@ -769,6 +884,22 @@ function CacheCard({ cache }: { cache: OverviewData["cache"] }) {
               {formatCompact(cache.totalRead)} served from cache out of{" "}
               {formatCompact(denom)} prompt input tokens
             </p>
+            <div className="mt-4">
+              <StackedTokenBar
+                segments={[
+                  {
+                    label: "Fresh input",
+                    value: freshInputTokens(cache.totalInput, cache.totalRead),
+                    color: "hsl(var(--chart-1))",
+                  },
+                  {
+                    label: "Cache read",
+                    value: normalizeCacheReadTokens(cache.totalInput, cache.totalRead),
+                    color: "hsl(var(--chart-3))",
+                  },
+                ]}
+              />
+            </div>
           </>
         )}
       </CardContent>
@@ -780,7 +911,7 @@ function LatencyCard({ latency }: { latency: OverviewData["latency"] }) {
   return (
     <Card data-testid="overview-latency">
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>Latency</CardTitle>
+        <CardTitle>Chat latency distribution</CardTitle>
         <Link
           to="/latency"
           search={(prev) => prev}
@@ -797,22 +928,12 @@ function LatencyCard({ latency }: { latency: OverviewData["latency"] }) {
               description="Latency percentiles appear once chat spans report durations."
             />
         ) : (
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {(
-              [
-                ["p50", latency.p50],
-                ["p90", latency.p90],
-                ["p99", latency.p99],
-              ] as const
-            ).map(([label, value]) => (
-              <div key={label}>
-                <div className="text-xs text-muted-foreground">{label}</div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {formatMs(value)}
-                </div>
-              </div>
-            ))}
-          </div>
+          <PercentileBar
+            p50={latency.p50}
+            p90={latency.p90}
+            p99={latency.p99}
+            count={latency.calls}
+          />
         )}
       </CardContent>
     </Card>
@@ -1127,14 +1248,7 @@ function ModelEconomicsCockpit({
               description="No priced model rows in this window — pricing may be missing for the active models."
             />
           ) : (
-            <Donut
-              data={costShare}
-              nameKey="model"
-              valueKey="cost"
-              className="h-[300px]"
-              innerRadius={52}
-              outerRadius={92}
-            />
+            <ModelCostBars rows={costShare} />
           )}
         </InsightCard>
         <InsightCard
@@ -1291,9 +1405,9 @@ function CachePerformanceCockpit({
   const cacheCreate = tokenMixValue(insights, "cache_create");
   const freshInput = freshInputTokens(input, cacheRead);
   const cacheComposition = [
-    { name: "Fresh input", value: freshInput },
-    { name: "Cache read", value: cacheRead },
-    { name: "Cache create", value: cacheCreate },
+    { label: "Fresh input", value: freshInput, color: "hsl(var(--chart-1))" },
+    { label: "Cache read", value: cacheRead, color: "hsl(var(--chart-3))" },
+    { label: "Cache create", value: cacheCreate, color: "hsl(var(--chart-4))" },
   ].filter((row) => row.value > 0);
   const savingsKnown = insights.cacheSavings.coverage >= 0.8;
   const cacheHit = cacheHitRatio(input, cacheRead);
@@ -1305,7 +1419,8 @@ function CachePerformanceCockpit({
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <InsightCard
-          title="Cache composition"
+          title="Cache accounting"
+          description="Prompt tokens split into fresh, cache read, and cache write."
           eyebrow="Selected window"
           stat={`${formatPct(cacheHit)} hit rate`}
           linkTo="/cache"
@@ -1313,18 +1428,10 @@ function CachePerformanceCockpit({
           {cacheComposition.length === 0 ? (
             <EmptyState
               title="No cache traffic yet"
-              description="Cache composition appears once prompt-cache reads or writes are recorded."
+              description="Cache accounting appears once prompt-cache reads or writes are recorded."
             />
           ) : (
-            <Donut
-              data={cacheComposition}
-              nameKey="name"
-              valueKey="value"
-              className="h-[220px]"
-              innerRadius={44}
-              outerRadius={78}
-              legend={false}
-            />
+            <StackedTokenBar segments={cacheComposition} className="pt-2" />
           )}
         </InsightCard>
         <InsightCard
@@ -1356,7 +1463,16 @@ function CachePerformanceCockpit({
           }
           linkTo="/latency"
         >
-          <PercentileGrid summary={insights.performance.chat} />
+          {insights.performance.chat.count === 0 ? (
+            <PercentileGrid summary={insights.performance.chat} />
+          ) : (
+            <PercentileBar
+              p50={insights.performance.chat.p50_ms}
+              p90={insights.performance.chat.p90_ms}
+              p99={insights.performance.chat.p99_ms}
+              count={insights.performance.chat.count}
+            />
+          )}
         </InsightCard>
         <InsightCard
           title="Streaming start"

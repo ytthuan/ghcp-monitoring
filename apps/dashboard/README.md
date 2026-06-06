@@ -145,6 +145,7 @@ upstream alias map.
 
 ## Cache hit rate
 
-Defined as `cache_read / (cache_read + input)` over the chosen filter window
-— the share of input-equivalent tokens served from prompt cache. Surfaced on
-`/cache` next to the formula badge.
+Defined as `cache_read / input` over the chosen filter window — the share of
+prompt input tokens served from cache. Note that `input` already includes the
+cache-read tokens, so the denominator is `input` (not `cache_read + input`).
+Surfaced on `/cache` next to the formula badge.
