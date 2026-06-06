@@ -50,3 +50,4 @@ aspire-data/
 
 # Local-only scratch directory (used by the dashboard for ad-hoc fixtures)
 tmp/
+/output

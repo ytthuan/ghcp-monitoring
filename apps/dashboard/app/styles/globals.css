@@ -59,6 +59,23 @@
   --chart-3: 28  90% 42%;           /* darker orange — clears 4.5:1 on cream */
   --chart-4: 280 60% 50%;           /* purple */
   --chart-5: 340 70% 50%;           /* magenta */
+
+  /* Decorative brand accents — used ONLY for gradients / auroras / glows.
+     Never wired to functional text/background/card tokens, so WCAG contrast
+     and the cream-bg / white-card invariants are untouched. */
+  --brand: 222 83% 55%;
+  --brand-2: 268 72% 58%;
+  --brand-3: 190 85% 42%;
+  --glow: 222 90% 58%;
+
+  /* Motion tokens */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --dur-1: 140ms;
+  --dur-2: 220ms;
+  --dur-3: 360ms;
+  --dur-4: 560ms;
 }
 
 .dark {
@@ -87,6 +104,12 @@
   --chart-3: 30  88% 60%;
   --chart-4: 280 70% 70%;
   --chart-5: 340 80% 65%;
+
+  /* Brighter decorative accents for the dark canvas. */
+  --brand: 213 96% 64%;
+  --brand-2: 272 86% 72%;
+  --brand-3: 190 90% 55%;
+  --glow: 213 96% 64%;
 }
 
 html {
@@ -102,5 +125,195 @@ html {
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
       "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* Custom scrollbars — quiet, theme-aware, never intrusive. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.55);
+  }
+  ::selection {
+    background-color: hsl(var(--brand) / 0.25);
+    color: hsl(var(--foreground));
+  }
+}
+
+/* ===========================================================================
+   Motion system
+   ---------------------------------------------------------------------------
+   Hand-authored classes (never purged). All entrance animations use
+   `both` fill so the element rests in its final, fully-visible state — this
+   keeps them SSR/hydration-safe (the node is always in the DOM; only opacity
+   and transform animate). Infinite/decorative loops are paused under reduced
+   motion and when the tab is hidden.
+   ======================================================================== */
+
+@keyframes ghcp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ghcp-enter-up {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ghcp-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ghcp-pop-in {
+  0% { opacity: 0; transform: scale(0.8); }
+  60% { transform: scale(1.04); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes ghcp-shimmer {
+  0% { background-position: -160% 0; }
+  100% { background-position: 160% 0; }
+}
+@keyframes ghcp-aurora {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  100% { transform: translate3d(2%, -3%, 0) rotate(9deg) scale(1.08); }
+}
+@keyframes ghcp-glow-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+@keyframes ghcp-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes ghcp-radix-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-2px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ghcp-radix-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: scale(0.96) translateY(-2px); }
+}
+
+/* Entrance utilities -------------------------------------------------------- */
+/* fill-mode is `backwards` (not `both`): we need the pre-start state applied
+   before the animation/stagger-delay begins, but we must NOT fill forwards —
+   a persistently-filling opacity/transform animation makes the element a
+   stacking context in Chromium even at its resting value, which would trap
+   inline-rendered overlays (Dialog/Sheet at z-50) below the sticky FilterBar
+   (z-20). The resting state already equals each keyframe's `to` (opacity:1,
+   transform:none), so dropping the forwards fill is visually identical. */
+.anim-enter { animation: ghcp-fade-in var(--dur-3) var(--ease-out) backwards; }
+.anim-enter-up { animation: ghcp-enter-up var(--dur-3) var(--ease-out) backwards; }
+.anim-scale-in { animation: ghcp-scale-in var(--dur-3) var(--ease-out) backwards; }
+.anim-pop { animation: ghcp-pop-in var(--dur-2) var(--ease-spring) backwards; }
+
+/* Staggered children — first 10 get an incremental delay; callers can also
+   override via inline `style={{ animationDelay }}`. */
+.stagger-children > * { animation: ghcp-enter-up var(--dur-3) var(--ease-out) backwards; }
+.stagger-children > *:nth-child(1) { animation-delay: 30ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 70ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 110ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 190ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 230ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 270ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 310ms; }
+.stagger-children > *:nth-child(9) { animation-delay: 350ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 390ms; }
+
+/* Interactive elevation — clickable cards only (never table rows / sticky bars).
+   Transform-based, so it never reflows siblings or jiggles the scrollbar. */
+.card-interactive {
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+}
+.card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px -16px hsl(var(--foreground) / 0.28);
+  border-color: hsl(var(--brand) / 0.4);
+}
+
+/* Gradient text for hero numbers / brand marks. */
+.text-gradient {
+  background-image: linear-gradient(120deg, hsl(var(--brand)), hsl(var(--brand-2)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Shimmer sweep overlay (used by Skeleton on top of its pulse). */
+.shimmer-sweep { position: relative; overflow: hidden; }
+.shimmer-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--foreground) / 0.08),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: ghcp-shimmer 1.6s ease-in-out infinite;
+}
+
+.spin-loop { animation: ghcp-spin 0.8s linear infinite; }
+
+/* Radix popper/overlay enter+exit — these primitives shipped with no motion. */
+.radix-pop[data-state="open"] { animation: ghcp-radix-in var(--dur-2) var(--ease-out); }
+.radix-pop[data-state="closed"] { animation: ghcp-radix-out var(--dur-1) var(--ease-out); }
+
+/* Slide-out drawer (custom <Sheet/>) entrance — mount-only, no exit (the panel
+   unmounts on close). Emphasized easing for a confident drawer feel. */
+@keyframes ghcp-slide-in-right {
+  from { opacity: 0.4; transform: translate3d(100%, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ghcp-slide-in-left {
+  from { opacity: 0.4; transform: translate3d(-100%, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+.sheet-enter-right { animation: ghcp-slide-in-right var(--dur-3) var(--ease-emphasized) backwards; }
+.sheet-enter-left { animation: ghcp-slide-in-left var(--dur-3) var(--ease-emphasized) backwards; }
+
+/* Full-viewport decorative aurora. Sits behind everything via -z-10 inside an
+   isolated stacking context (AppShell adds `isolate`). background-image only,
+   so it never alters the computed background-color of <body> (cream) or any
+   card (white). Paused when the tab is hidden. */
+.aurora-layer {
+  position: fixed;
+  inset: -25%;
+  pointer-events: none;
+  opacity: 0.55;
+  filter: blur(70px);
+  background-image:
+    radial-gradient(38% 38% at 18% 22%, hsl(var(--brand) / 0.20), transparent 70%),
+    radial-gradient(34% 34% at 82% 24%, hsl(var(--brand-2) / 0.18), transparent 70%),
+    radial-gradient(42% 42% at 62% 86%, hsl(var(--brand-3) / 0.16), transparent 72%);
+  animation: ghcp-aurora 34s var(--ease-emphasized) infinite alternate;
+}
+.dark .aurora-layer { opacity: 0.4; }
+[data-doc-hidden="true"] .aurora-layer { animation-play-state: paused; }
+
+/* ===========================================================================
+   Accessibility floor — honor prefers-reduced-motion.
+   Clamps durations to ~0 (so transitionend / animationend still fire and Radix
+   Presence + Sonner exits keep working) and stops infinite loops. We never set
+   `animation: none` / `transition: none`, which would break those libraries.
+   ======================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

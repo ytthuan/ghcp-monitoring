@@ -125,15 +125,16 @@ function NavLink({
       onClick={() => onNavigate?.()}
       aria-label={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-        "data-[status=active]:bg-accent data-[status=active]:text-accent-foreground",
+        "group relative flex items-center overflow-hidden rounded-md text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+        "data-[status=active]:bg-accent data-[status=active]:font-medium data-[status=active]:text-accent-foreground",
+        "before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-[hsl(var(--brand))] before:to-[hsl(var(--brand-2))] before:opacity-0 before:transition-opacity before:duration-200 data-[status=active]:before:opacity-100",
         FOCUS_RING,
         collapsed
           ? "h-9 w-9 justify-center"
           : "gap-2 px-3 py-2",
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+      <Icon className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" aria-hidden />
       {collapsed ? null : <span className="truncate">{item.label}</span>}
     </Link>
   );

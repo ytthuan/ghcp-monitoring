@@ -7,8 +7,10 @@ export const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    data-slot="card"
     className={cn(
       "rounded-lg border bg-card text-card-foreground shadow-sm",
+      "transition-[box-shadow,border-color,transform] duration-200",
       className,
     )}
     {...props}
@@ -22,6 +24,7 @@ export const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    data-slot="card-header"
     className={cn("flex flex-col space-y-1.5 p-6", className)}
     {...props}
   />
@@ -34,6 +37,7 @@ export const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    data-slot="card-title"
     className={cn(
       "text-sm font-medium leading-none tracking-tight text-muted-foreground",
       className,

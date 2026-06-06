@@ -5,6 +5,10 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {
   ArrowUpRight,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Hash,
+  DatabaseZap,
   Coins,
   DollarSign,
   Database,
@@ -17,6 +21,7 @@ import { cn } from "~/lib/utils";
 import { useFilters } from "~/lib/use-filters";
 import { useTimezone, resolveQueryTz, formatTimestampInTz } from "~/lib/use-timezone";
 import { KpiCard } from "~/components/data/KpiCard";
+import { AnimatedNumber } from "~/components/data/AnimatedNumber";
 import { FormulaBadge } from "~/components/data/FormulaBadge";
 import { EmptyState } from "~/components/layout/EmptyState";
 import {
@@ -487,42 +492,92 @@ function Section1({
     >
       <KpiCard
         label="Σ Input tokens"
-        value={formatCompact(totals.input)}
+        numericValue={totals.input}
+        format={formatCompact}
         tooltip={NUM_FULL.format(totals.input)}
+        icon={ArrowDownToLine}
+        accent="hsl(var(--chart-1))"
+        index={0}
       />
       <KpiCard
         label="Σ Output tokens"
-        value={formatCompact(totals.output)}
+        numericValue={totals.output}
+        format={formatCompact}
         tooltip={NUM_FULL.format(totals.output)}
+        icon={ArrowUpFromLine}
+        accent="hsl(var(--chart-2))"
+        index={1}
       />
       <KpiCard
         label="Σ Cache read tokens"
-        value={formatCompact(totals.cache_read)}
+        numericValue={totals.cache_read}
+        format={formatCompact}
         tooltip={NUM_FULL.format(totals.cache_read)}
+        icon={Database}
+        accent="hsl(var(--chart-3))"
+        index={2}
       />
       <KpiCard
         label="Σ Cache create tokens"
-        value={formatCompact(totals.cache_create)}
+        numericValue={totals.cache_create}
+        format={formatCompact}
         tooltip={NUM_FULL.format(totals.cache_create)}
+        icon={DatabaseZap}
+        accent="hsl(var(--chart-4))"
+        index={3}
       />
       <KpiCard
         label="Total calls"
-        value={formatCompact(totals.calls)}
+        numericValue={totals.calls}
+        format={formatCompact}
         tooltip={NUM_FULL.format(totals.calls)}
+        icon={Hash}
+        accent="hsl(var(--chart-5))"
+        index={4}
       />
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
+      <Card
+        className="group anim-enter-up card-interactive relative min-w-0 overflow-hidden"
+        style={{ animationDelay: "225ms" }}
+      >
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[3px] opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+          style={{
+            backgroundImage:
+              "linear-gradient(to bottom, hsl(152 60% 42%), transparent)",
+          }}
+        />
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>Estimated cost</CardTitle>
+          <DollarSign
+            className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-foreground"
+            aria-hidden
+          />
         </CardHeader>
         <CardContent>
           <div className="truncate text-2xl font-semibold tabular-nums">
-            {formatUsd(cost.total)}
+            <AnimatedNumber value={cost.total} format={formatUsd} />
           </div>
         </CardContent>
       </Card>
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
+      <Card
+        className="group anim-enter-up card-interactive relative min-w-0 overflow-hidden"
+        style={{ animationDelay: "270ms" }}
+      >
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[3px] opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+          style={{
+            backgroundImage:
+              "linear-gradient(to bottom, hsl(var(--brand-2)), transparent)",
+          }}
+        />
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>AI Credits (GitHub)</CardTitle>
+          <Coins
+            className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-foreground"
+            aria-hidden
+          />
         </CardHeader>
         <CardContent>
           <div
@@ -533,7 +588,10 @@ function Section1({
                 : `Premium-request credits billed by GitHub (github.copilot.cost). Observed on all ${NUM_FULL.format(totals.calls)} calls.`
             }
           >
-            {formatCredits(totals.copilot_cost)}
+            <AnimatedNumber
+              value={totals.copilot_cost}
+              format={formatCredits}
+            />
           </div>
           {totals.copilot_cost_calls < totals.calls ? (
             <p className="mt-1 text-[11px] leading-snug text-muted-foreground">

@@ -337,7 +337,7 @@ function FilterChip({
   return (
     <span
       data-testid={testId}
-      className="inline-flex items-center gap-1 rounded-sm border bg-muted px-2 py-0.5 text-xs text-foreground"
+      className="anim-pop inline-flex items-center gap-1 rounded-sm border bg-muted px-2 py-0.5 text-xs text-foreground"
     >
       <span className="truncate max-w-[16rem]">{label}</span>
       <button

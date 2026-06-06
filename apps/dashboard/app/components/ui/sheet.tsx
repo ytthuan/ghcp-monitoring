@@ -24,12 +24,13 @@ export function Sheet({
     <div className="fixed inset-0 z-50 flex">
       <button
         aria-label="Close"
-        className="absolute inset-0 bg-black/40"
+        className="anim-enter absolute inset-0 bg-black/40"
         onClick={() => onOpenChange(false)}
       />
       <div
         className={cn(
           "relative h-full w-full max-w-md overflow-auto bg-background p-6 shadow-xl",
+          side === "left" ? "sheet-enter-left" : "sheet-enter-right",
           panelSide,
         )}
       >

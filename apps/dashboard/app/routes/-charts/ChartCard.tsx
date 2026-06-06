@@ -47,7 +47,7 @@ export function ChartCard({
   testId?: string;
 }) {
   return (
-    <Card data-testid={testId ?? "chart-card"}>
+    <Card data-testid={testId ?? "chart-card"} className="card-interactive">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div className="space-y-1">
           {eyebrow ? (
@@ -108,7 +108,7 @@ export function ChartCard({
             side ? "lg:grid-cols-[minmax(0,1fr)_240px]" : "grid-cols-1",
           )}
         >
-          <div className="min-w-0">{chart}</div>
+          <div className="anim-enter min-w-0">{chart}</div>
           {side ? (
             <aside
               className="space-y-4 lg:border-l lg:pl-6"

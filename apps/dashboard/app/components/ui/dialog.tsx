@@ -58,7 +58,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
       <button
         aria-label="Close dialog"
         type="button"
-        className="absolute inset-0 bg-black/50"
+        className="anim-enter absolute inset-0 bg-black/50"
         onClick={() => onOpenChange(false)}
       />
       <div
@@ -66,7 +66,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 mx-auto flex w-full max-w-[min(95vw,72rem)] flex-col",
+          "anim-enter relative z-10 mx-auto flex w-full max-w-[min(95vw,72rem)] flex-col",
           "h-full sm:my-6 sm:h-auto sm:max-h-[90vh]",
           "overflow-hidden rounded-none bg-background shadow-xl",
           "sm:rounded-lg sm:border",

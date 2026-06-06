@@ -83,8 +83,13 @@ export function Sidebar() {
           collapsed ? "justify-center px-0" : "px-4",
         )}
       >
-        <Activity className="h-4 w-4 shrink-0" aria-hidden />
-        {collapsed ? null : <span>Copilot Dashboard</span>}
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[hsl(var(--brand))] to-[hsl(var(--brand-2))] text-white shadow-sm"
+          style={{ boxShadow: "0 4px 14px -4px hsl(var(--brand) / 0.6)" }}
+        >
+          <Activity className="h-4 w-4" aria-hidden />
+        </span>
+        {collapsed ? null : <span className="truncate">Copilot Dashboard</span>}
       </div>
       <SidebarNav collapsed={collapsed} />
       <div
